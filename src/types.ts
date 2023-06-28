@@ -54,6 +54,7 @@ export interface CommonOptions {
   failOnOutdated?: boolean
   silent?: boolean
   force?: boolean
+  global?: boolean
   packageMode?: { [name: string]: PackageMode }
 }
 

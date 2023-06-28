@@ -27,6 +27,12 @@ function commonOptions(args: Argv<{}>): Argv<CommonOptions> {
       type: 'boolean',
       describe: 'exit with code 1 if outdated dependencies are found',
     })
+    .option('global', {
+      alias: 'g',
+      default: false,
+      type: 'boolean',
+      describe: 'update global packages',
+    })
     .option('silent', {
       alias: 's',
       default: false,

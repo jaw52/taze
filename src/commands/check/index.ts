@@ -1,51 +1,26 @@
 /* eslint-disable no-console */
-import c from 'picocolors'
-import type { SingleBar } from 'cli-progress'
 import { parseNi, parseNu, run } from '@antfu/ni'
+import c from 'picocolors'
 import prompts from 'prompts'
-import { createMultiProgresBar } from '../../log'
+import { execa } from 'execa'
 import type {
   CheckOptions,
   PackageMeta,
 } from '../../types'
-import { CheckPackages } from '../../api/check'
+import { collectFromGlobal, collectFromProject } from '../../api/check'
 import { writePackage } from '../../io/packages'
+import { dumpDependencies } from '../../io/dependencies'
 import { promptInteractive } from './interactive'
 import { renderPackages } from './render'
 
 export async function check(options: CheckOptions) {
   let exitCode = 0
-  const bars = options.loglevel === 'silent' ? null : createMultiProgresBar()
-  let packagesBar: SingleBar | undefined
-  const depBar = bars?.create(1, 0)
-
   let resolvePkgs: PackageMeta[] = []
 
-  await CheckPackages(options, {
-    afterPackagesLoaded(pkgs) {
-      packagesBar = (options.recursive && pkgs.length)
-        ? bars?.create(pkgs.length, 0, { type: c.cyan('pkg'), name: c.cyan(pkgs[0].name) })
-        : undefined
-    },
-    beforePackageStart(pkg) {
-      packagesBar?.increment(0, { name: c.cyan(pkg.name) })
-      depBar?.start(pkg.deps.length, 0, { type: c.green('dep') })
-    },
-    beforePackageWrite() {
-      // disbale auto write
-      return false
-    },
-    afterPackageEnd(pkg) {
-      packagesBar?.increment(1)
-      depBar?.stop()
-      resolvePkgs.push(pkg)
-    },
-    onDependencyResolved(pkgName, name, progress) {
-      depBar?.update(progress, { name })
-    },
-  })
-
-  bars?.stop()
+  if (options.global)
+    resolvePkgs = await collectFromGlobal(options)
+  else
+    resolvePkgs = await collectFromProject(options)
 
   if (options.interactive)
     resolvePkgs = await promptInteractive(resolvePkgs, options)
@@ -148,7 +123,15 @@ export async function check(options: CheckOptions) {
       console.log(c.magenta('updating...'))
       console.log()
 
-      await run(parseNu, options.recursive ? ['-r'] : [])
+      if (options.global) {
+        const changes = resolvePkgs[0].resolved.filter(i => i.update)
+        const dependencies = dumpDependencies(changes, 'dependencies')
+        const updateArgs = Object.entries(dependencies).map(([name, version]) => `${name}@${version}`)
+        await execa('npm install -g', updateArgs)
+      }
+      else {
+        await run(parseNu, options.recursive ? ['-r'] : [])
+      }
     }
   }
 
